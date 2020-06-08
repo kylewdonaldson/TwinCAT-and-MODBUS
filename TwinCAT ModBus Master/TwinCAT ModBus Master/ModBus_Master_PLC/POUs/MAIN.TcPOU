@@ -1,0 +1,198 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.3">
+  <POU Name="MAIN" Id="{59fa54fa-83bc-4230-a6af-31928d1d8095}" SpecialFunc="None">
+    <Declaration><![CDATA[PROGRAM MAIN
+VAR
+
+	bForceConfig	: BOOL;						// set this to re-run configuration for the MB FB
+	sIpAdress		: STRING := '172.17.16.1';	// IP address of target device for ModBus functions
+
+	// Write some random data to the other MODBUS slave 
+
+	fb_MBWriteRegs	: FB_MBWriteRegs;
+
+	fbSetRegTimer	: TON	:= (PT := T#2S);	// timer to set MB registers at certain interval 
+	bStart			: BOOL;						// set this to set MB registers
+
+	arrdata	 		: ARRAY[0..3] OF WORD;		// data to write to some MB registers
+	uiRepeats		: UINT;						// number of times registers have been set
+	iInt			: INT;						// iterator 
+	
+
+	// Set parameters for scrolling coils on other MODBUS device 
+
+	fb_MBSetScroll	: FB_MBWriteSingleCoil;
+	fb_MBWritePause	: FB_MBWriteSingleReg;
+
+	bScroll			: BOOL;				// Set this to request the MB device scroll it's coils 
+	uiPauseTime		: UINT	:= 500;		// Time in MS to pause between coils while scrolling
+	
+	// Internal to the scrolling logic
+	bScrollPrev			: BOOL;	
+	uiPauseTimePrev		: UINT;
+	bTriggerScrollSet	: BOOL;
+	bTriggerPauseSet	: BOOL;
+
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[// Set up MODBUS function blocks
+IF(_TaskInfo[GETCURTASKINDEXEX()].FirstCycle OR bForceConfig) THEN
+	bForceConfig			:= FALSE;
+	
+	// write registers - random data 
+	fb_MBWriteRegs.sIPAddr	:= sIpAdress;
+	fb_MBWriteRegs.nTCPPort	:= 502;
+	fb_MBWriteRegs.nUnitID	:= 16#FF;			// set to 16#FF if addressing the target directly via TCP
+
+	// write registers - control slave scroller 
+	fb_MBWritePause.sIPAddr	:= sIpAdress;
+	fb_MBWritePause.nTCPPort	:= 502;
+	fb_MBWritePause.nUnitID	:= 16#FF;			// set to 16#FF if addressing the target directly via TCP
+	
+	// set coils 
+	fb_MBSetScroll.sIPAddr	:= sIpAdress;
+	fb_MBSetScroll.nTCPPort	:= 502;
+	fb_MBSetScroll.nUnitID	:= 16#FF;			// set to 16#FF if addressing the target directly via TCP
+
+END_IF
+
+
+
+
+
+// Periodically write some data to MB registers 
+fbSetRegTimer(IN:=TRUE);		// run our send update timer  
+IF fbSetRegTimer.Q THEN			// if the timer has expired (its time to set the registers) 
+	fbSetRegTimer(IN:=FALSE);  	// reset the timer 
+	
+	// Generate some new values for our registers
+	FOR iInt:= 0 TO 3 BY 1 DO 
+		arrData[iInt]	:= arrdata[iInt] + iInt + 1;	// increment each value by 1 
+	END_FOR
+
+	bStart		:= TRUE;					// start a new MODBUS set operation 
+	uiRepeats	:= uiRepeats + 1;			// increment the repeats counter 
+	
+END_IF	
+
+// Run the MB wite FB if requested and while still busy or in error 
+IF(bStart OR fb_MBWriteRegs.bBusy OR fb_MBWriteRegs.bError) THEN	
+		
+	fb_MBWriteRegs(	nMBAddr		:= 16#8004, 
+					nQuantity	:= 4, 
+					cbLength	:= SIZEOF(arrdata), 
+					pSrcAddr	:= ADR(arrdata), 
+					bExecute	:= bStart, 
+					tTimeout	:= T#2S, 
+					bBusy=> , 
+					bError=> , 
+					nErrId=> );
+					
+	bStart	:= FALSE;	// reset the MB set start trigger 				
+END_IF				
+
+IF (bScroll <> bScrollPrev) THEN
+	bTriggerScrollSet	:= TRUE;
+END_IF
+
+IF (uiPauseTime <> uiPauseTimePrev) THEN
+	bTriggerPauseSet	:= TRUE;
+END_IF
+// Update the memory of the previous scroll pause value and scroll activation status 
+bScrollPrev		:= bScroll;
+uiPauseTimePrev	:= uiPauseTime;
+
+
+// Run the MB setcoils FB if requested and while still busy or in error 
+IF(bTriggerScrollSet OR fb_MBSetScroll.bBusy OR fb_MBSetScroll.bError) THEN	
+	IF(bScroll) THEN	
+		fb_MBSetScroll(	nMBAddr		:= 16#8000,
+						nValue		:= 16#FF00,
+						bExecute	:= bTriggerScrollSet,
+						tTimeout	:= T#2S, 
+						bBusy=> , 
+						bError=> , 
+						nErrId=> );
+	ELSE
+		fb_MBSetScroll(	nMBAddr		:= 16#8000,
+						nValue		:= 16#0000,
+						bExecute	:= bTriggerScrollSet,
+						tTimeout	:= T#2S, 
+						bBusy=> , 
+						bError=> , 
+						nErrId=> );
+	END_IF					
+
+	bTriggerScrollSet	:= FALSE;	// reset the MB set start trigger 				
+END_IF				
+
+
+// Run the MB setpause FB if requested and while still busy or in error 
+IF(bTriggerPauseSet OR fb_MBWritePause.bBusy OR fb_MBWritePause.bError) THEN	
+		
+	fb_MBWritePause(nMBAddr		:= 16#8000, 
+					nValue		:= UINT_TO_WORD(uiPauseTime),
+					bExecute	:= bTriggerPauseSet, 
+					tTimeout	:= T#2S, 
+					bBusy=> , 
+					bError=> , 
+					nErrId=> );
+					
+	bTriggerPauseSet	:= FALSE;	// reset the MB set start trigger 				
+END_IF				
+]]></ST>
+    </Implementation>
+    <LineIds Name="MAIN">
+      <LineId Id="57" Count="0" />
+      <LineId Id="31" Count="0" />
+      <LineId Id="40" Count="0" />
+      <LineId Id="45" Count="0" />
+      <LineId Id="186" Count="3" />
+      <LineId Id="194" Count="0" />
+      <LineId Id="190" Count="3" />
+      <LineId Id="122" Count="0" />
+      <LineId Id="127" Count="0" />
+      <LineId Id="124" Count="2" />
+      <LineId Id="123" Count="0" />
+      <LineId Id="41" Count="0" />
+      <LineId Id="61" Count="0" />
+      <LineId Id="130" Count="4" />
+      <LineId Id="64" Count="5" />
+      <LineId Id="71" Count="1" />
+      <LineId Id="83" Count="0" />
+      <LineId Id="32" Count="0" />
+      <LineId Id="93" Count="0" />
+      <LineId Id="84" Count="0" />
+      <LineId Id="23" Count="0" />
+      <LineId Id="86" Count="0" />
+      <LineId Id="85" Count="0" />
+      <LineId Id="87" Count="0" />
+      <LineId Id="90" Count="0" />
+      <LineId Id="73" Count="8" />
+      <LineId Id="88" Count="1" />
+      <LineId Id="24" Count="0" />
+      <LineId Id="162" Count="0" />
+      <LineId Id="161" Count="0" />
+      <LineId Id="163" Count="1" />
+      <LineId Id="166" Count="0" />
+      <LineId Id="165" Count="0" />
+      <LineId Id="167" Count="1" />
+      <LineId Id="288" Count="2" />
+      <LineId Id="287" Count="0" />
+      <LineId Id="199" Count="0" />
+      <LineId Id="215" Count="3" />
+      <LineId Id="291" Count="0" />
+      <LineId Id="251" Count="0" />
+      <LineId Id="253" Count="0" />
+      <LineId Id="224" Count="3" />
+      <LineId Id="294" Count="6" />
+      <LineId Id="292" Count="0" />
+      <LineId Id="301" Count="0" />
+      <LineId Id="228" Count="7" />
+      <LineId Id="303" Count="0" />
+      <LineId Id="239" Count="7" />
+      <LineId Id="198" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

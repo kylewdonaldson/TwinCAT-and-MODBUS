@@ -1,0 +1,64 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.3">
+  <POU Name="MAIN" Id="{f3b755f5-16c6-4dcf-87f7-41ac11c53edf}" SpecialFunc="None">
+    <Declaration><![CDATA[PROGRAM MAIN
+VAR
+	bScroll			: BOOL;							// Set this to scroll the MB coils
+	fbScrollTimer	: TON	:= (PT := T#0.1S);		// timer to scroll the MB registers  
+	iIndex 			: INT;
+	
+	wPause	: WORD	:= 500;	// timer setting for scrolling MB coils 
+	
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[// Set the modbus scroll if InputCoil 0 is set
+IF(GVL.mb_Output_Coils[0] = TRUE) THEN
+	bScroll	:= TRUE;
+ELSE
+	bScroll	:= FALSE;
+END_IF
+
+// get the pause time from Register 0
+wPause				:= GVL.mb_Output_Registers[0];
+fbScrollTimer.PT	:= WORD_TO_TIME(wPause);
+
+// Scroll the ModBus coils if requested
+IF(bScroll AND (wPause > 0)) THEN
+	GVL.mb_Input_Coils[iIndex]	:= TRUE;
+	fbScrollTimer(IN:=TRUE);		// run our send update timer  
+	IF fbScrollTimer.Q THEN			// if the timer has expired (its time to set the registers) 
+		fbScrollTimer(IN:=FALSE);  	// reset the timer 
+		iIndex	:= iIndex + 1;	
+		GVL.mb_Input_Coils[iIndex - 1]	:= FALSE;
+		GVL.mb_Input_Coils[iIndex]		:= TRUE;
+		IF(iIndex = 255) THEN
+			iIndex	:= 0;
+		END_IF
+	END_IF	
+END_IF
+
+]]></ST>
+    </Implementation>
+    <LineIds Name="MAIN">
+      <LineId Id="123" Count="3" />
+      <LineId Id="129" Count="0" />
+      <LineId Id="128" Count="0" />
+      <LineId Id="137" Count="0" />
+      <LineId Id="133" Count="0" />
+      <LineId Id="132" Count="0" />
+      <LineId Id="131" Count="0" />
+      <LineId Id="102" Count="0" />
+      <LineId Id="97" Count="0" />
+      <LineId Id="72" Count="0" />
+      <LineId Id="87" Count="0" />
+      <LineId Id="73" Count="3" />
+      <LineId Id="92" Count="1" />
+      <LineId Id="91" Count="0" />
+      <LineId Id="94" Count="1" />
+      <LineId Id="85" Count="1" />
+      <LineId Id="71" Count="0" />
+      <LineId Id="37" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

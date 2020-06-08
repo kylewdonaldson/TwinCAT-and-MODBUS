@@ -1,0 +1,13 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.3">
+  <GVL Name="GVL" Id="{3aac50e0-b14b-41f7-beeb-73c6d9a72787}">
+    <Declaration><![CDATA[{attribute 'qualified_only'}
+// These variable are mapped to the ModBus address ranges 0x8000 - 0x80FF for this device
+VAR_GLOBAL
+	mb_Input_Coils		: ARRAY[0..255] OF BOOL; // these coils can be queried by a MB master device using command 0x02
+	mb_Output_Coils		: ARRAY[0..255] OF BOOL; // these coils can be set by a MB master device using 0x0f and queried by 0x01
+	mb_Input_Registers	: ARRAY[0..255] OF WORD; // these registers are can be queried by a MB master device using command 0x04
+	mb_Output_Registers	: ARRAY[0..255] OF WORD; // registers can be set by a MB device using 0x10, queried by 0x03 and 0x06
+END_VAR]]></Declaration>
+  </GVL>
+</TcPlcObject>
