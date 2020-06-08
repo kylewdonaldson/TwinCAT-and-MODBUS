@@ -17,7 +17,7 @@ Some Notes on the TwinCAT MODBUS Service.
    if the variables used for MODBUS interfacing on the PLC are named as per default this mapping file must be generated and the PLC GVL
    names editted accordingly. 
    
-4. Remember to the Beckhoff Manual on Modbus if you get stuck, and check out InfoSys :)
+4. Remember to read the Beckhoff Manual on Modbus if you get stuck, and check out InfoSys :)
    
 5. A MODBUS tool such as QModMaster is a great aid to learning about MODBUS and debugging it.
    (http://domoticx.com/modbus-software-qmodmaster-windows/) 
